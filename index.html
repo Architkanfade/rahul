@@ -302,7 +302,7 @@
         function gameLoop() {
             if (isGameOver) return;
             updatePlayerPhysics();
-            updateOtherPlayers(); // NEW: Smoothly update other players
+            updateOtherPlayers();
             playerCar.style.left = player.x + 'px';
             playerCar.style.top = player.y + 'px';
             moveObstacles();
@@ -339,9 +339,9 @@
 
         function startGameListeners() {
             playersRef.onSnapshot(snapshot => {
-                const scores = [];
-                snapshot.forEach(doc => scores.push(doc.data()));
-                renderLeaderboard(scores.sort((a,b) => b.score - a.score));
+                const allScores = [];
+                snapshot.forEach(doc => allScores.push(doc.data()));
+                renderLeaderboard(allScores.sort((a,b) => b.score - a.score));
 
                 snapshot.docChanges().forEach(change => {
                     const docId = change.doc.id;
@@ -353,9 +353,8 @@
                             otherPlayers[docId].el.remove();
                             delete otherPlayers[docId];
                         }
-                    } else { // 'added' or 'modified'
+                    } else {
                         if (!otherPlayers[docId]) {
-                            // NEW: Store current and target positions for interpolation
                             const carEl = document.createElement('div');
                             carEl.className = 'car other-player';
                             carEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
@@ -368,7 +367,6 @@
                                 targetY: playerData.y
                             };
                         } else {
-                            // CHANGED: Only update the target position, don't teleport
                             otherPlayers[docId].targetX = playerData.x;
                             otherPlayers[docId].targetY = playerData.y;
                         }
@@ -377,11 +375,9 @@
             });
         }
 
-        // --- NEW: Interpolation function for other players ---
         function updateOtherPlayers() {
             for (const id in otherPlayers) {
                 const p = otherPlayers[id];
-                // Move current position a fraction of the way to the target
                 p.x += (p.targetX - p.x) * 0.2;
                 p.y += (p.targetY - p.y) * 0.2;
                 p.el.style.left = p.x + 'px';
@@ -405,9 +401,9 @@
             player.y = Math.max(0, Math.min(gameHeight - 80, player.y));
         }
 
-        // All other functions (managePresence, renderLeaderboard, obstacles, etc.)
         function managePresence(user) {
-            const userStatusRef = rtdb.ref('/status/'' + user.uid);
+            // THIS IS THE CORRECTED LINE
+            const userStatusRef = rtdb.ref('/status/' + user.uid);
             rtdb.ref('.info/connected').on('value', (snapshot) => {
                 if (snapshot.val() === false) return;
                 userStatusRef.onDisconnect().remove();
@@ -419,62 +415,4 @@
             leaderboardList.innerHTML = '';
             scores.slice(0, 5).forEach((p, index) => {
                 const li = document.createElement('li');
-                li.innerHTML = `<span class="name">${index + 1}. ${p.name}</span> <span class="score">${p.score}</span>`;
-                leaderboardList.appendChild(li);
-            });
-        }
-        
-        function spawnObstacle() {
-            if(isGameOver) return;
-            const obsEl = document.createElement('div');
-            obsEl.className = 'car obstacle';
-            obsEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
-            obsEl.x = Math.random() * (gameWidth - 50);
-            obsEl.y = -100;
-            obsEl.style.left = obsEl.x + 'px';
-            obsEl.style.top = obsEl.y + 'px';
-            gameContainer.appendChild(obsEl);
-            obstacles.push(obsEl);
-        }
-
-        function moveObstacles() {
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                const obs = obstacles[i];
-                obs.y += 5;
-                if (obs.y > gameHeight) {
-                    obs.remove();
-                    obstacles.splice(i, 1);
-                } else {
-                    obs.style.top = obs.y + 'px';
-                    if (checkCollision(playerCar, obs)) endGame(true);
-                }
-            }
-        }
-        
-        function checkCollision(a, b) {
-            const aRect = a.getBoundingClientRect();
-            const bRect = b.getBoundingClientRect();
-            return !((aRect.bottom < bRect.top) || (aRect.top > bRect.bottom) || (aRect.right < bRect.left) || (aRect.left > bRect.right));
-        }
-        
-        function createRoadLines(){
-            for(let i=0; i < 5; i++){
-                let line = document.createElement("div");
-                line.className = "divider-line";
-                line.y = i * 120;
-                line.style.top = line.y + "px";
-                document.getElementById('road').appendChild(line);
-                roadLines.push(line);
-            }
-        }
-
-        function moveRoadLines(){
-            roadLines.forEach(line => {
-                line.y += (5 + Math.abs(player.vy * 0.5));
-                if(line.y > 500) line.y -= 600;
-                line.style.top = line.y + "px";
-            });
-        }
-    </script>
-</body>
-</html>
+                li.innerHTML = `<span class="name">${index + 1}. ${p.name}</span> <span class="score">${p.score}
