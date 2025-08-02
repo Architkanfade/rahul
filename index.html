@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Race</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --highlight-color: #f1c40f;
+            --player-color: #2ecc71;
+            --enemy-color: #e74c3c;
+            --light-text: #ecf0f1;
+            --border-color: #bdc3c7;
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--primary-color);
+            font-family: 'Press Start 2P', cursive;
+            color: var(--light-text);
+            overflow: hidden;
+        }
+        h1 {
+            color: var(--highlight-color);
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 4px 4px 0px rgba(0,0,0,0.4);
+        }
+        button {
+            padding: 10px 20px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 1em;
+            cursor: pointer;
+            border: 2px solid var(--light-text);
+            color: var(--light-text);
+            border-radius: 8px;
+            transition: all 0.1s;
+        }
+        .btn-green { background-color: var(--player-color); box-shadow: 0 5px 0 #1a743a; }
+        .btn-green:active { box-shadow: 0 2px 0 #1a743a; transform: translateY(3px); }
+
+        /* Screens */
+        .screen { text-align: center; }
+        #mainGameWrapper { display: none; justify-content: center; align-items: flex-start; gap: 30px; width: 100%; flex-wrap: wrap; }
+        #lobbyScreen { display: none; }
+
+        /* Lobby Styling */
+        #lobbyScreen h2 { color: var(--highlight-color); }
+        #createLobbyInput {
+            background-color: var(--light-text);
+            border: 2px solid var(--border-color);
+            padding: 10px;
+            font-family: 'Press Start 2P', cursive;
+            width: 250px;
+            margin-right: 10px;
+        }
+        #lobbyList {
+            list-style: none;
+            padding: 0;
+            margin-top: 20px;
+            max-height: 200px;
+            overflow-y: auto;
+            width: 400px;
+            background-color: var(--secondary-color);
+            border: 3px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+        }
+        .lobby-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--primary-color);
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+        .lobby-item button { font-size: 0.8em; padding: 8px 12px; }
+
+        /* Side Panels */
+        .side-panels { display: flex; flex-direction: column; gap: 20px; min-width: 300px; max-width: 350px; }
+        .game-info-panel { background-color: var(--secondary-color); padding: 20px; border-radius: 10px; border: 3px solid var(--border-color); text-align: center; }
+        .game-info-panel h2 { color: var(--highlight-color); margin-top: 0; margin-bottom: 20px; font-size: 1.2em; }
+        #leaderboard ul { list-style: none; padding: 0; margin: 0; text-align: left; }
+        #leaderboard li { display: flex; justify-content: space-between; padding: 8px; margin-bottom: 5px; background-color: var(--primary-color); border-radius: 5px; font-size: 0.8em; }
+        #leaderboard li .name { color: var(--player-color); }
+
+        /* Game Area */
+        #gameContainer { position: relative; width: 300px; height: 500px; background-color: var(--secondary-color); border: 5px solid var(--border-color); border-radius: 10px; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.7); }
+        #road { position: absolute; width: 100%; height: 100%; background-color: #555; background-image: linear-gradient(to right, #34495e 10%, #ecf0f1 10%, #ecf0f1 12%, transparent 12%, transparent 88%, #ecf0f1 88%, #ecf0f1 90%, #34495e 90%); }
+        .divider-line { position: absolute; left: 50%; transform: translateX(-50%); width: 8px; height: 40px; background-color: var(--highlight-color); }
+        #scoreBoard { position: absolute; top: 10px; left: 10px; font-size: 1em; color: var(--light-text); background-color: rgba(0,0,0,0.5); padding: 8px 12px; border-radius: 5px; z-index: 10; }
+        
+        /* Car Styling */
+        .car { position: absolute; width: 50px; height: 80px; z-index: 5; }
+        .car-body { width: 100%; height: 100%; border-radius: 10px 10px 5px 5px; position: relative; border: 2px solid; box-sizing: border-box; }
+        .car-window { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); width: 60%; height: 30%; background: #b0c4de; border-radius: 5px; border: 2px solid #555; }
+        #playerCar .car-body { background-color: var(--player-color); border-color: #1e8449; }
+        .other-player .car-body { background-color: #3498db; border-color: #2980b9; } /* Blue for other players */
+        .obstacle .car-body { background-color: var(--enemy-color); border-color: #c0392b; }
+
+        /* Game Over Screen */
+        #gameOverScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.8); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 100; }
+        #gameOverScreen h2 { color: var(--enemy-color); font-size: 2em; }
+        #gameOverScreen button { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h1>Retro Race</h1>
+
+    <div id="authScreen" class="screen">
+        <p>Sign in to join the race!</p>
+        <button id="loginButton" class="btn-green">Sign In with Google</button>
+    </div>
+
+    <div id="lobbyScreen" class="screen">
+        <h2>Join a Race</h2>
+        <div>
+            <input type="text" id="createLobbyInput" placeholder="Enter New Lobby Name">
+            <button id="createLobbyBtn" class="btn-green">Create</button>
+        </div>
+        <h3>Or Join an Existing One:</h3>
+        <ul id="lobbyList"></ul>
+    </div>
+
+    <div id="mainGameWrapper">
+        <div id="gameContainer">
+            <div id="road"></div>
+            <div id="scoreBoard">Score: 0</div>
+            <div id="playerCar" class="car">
+                <div class="car-body"><div class="car-window"></div></div>
+            </div>
+            <div id="gameOverScreen">
+                <h2>GAME OVER</h2>
+                <button id="backToLobbyBtn">Back to Lobby</button>
+            </div>
+        </div>
+        <div class="side-panels">
+            <div class="game-info-panel">
+                <h2>Controls</h2>
+                <p>&larr; &rarr; Arrow Keys to Steer</p>
+                <p>&uarr; &darr; Arrow Keys for Speed</p>
+            </div>
+            <div class="game-info-panel" id="leaderboard">
+                <h2>Leaderboard</h2>
+                <ul></ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+
+    <script>
+        // Your Firebase configuration
+        const firebaseConfig = { apiKey: "AIzaSyCetAMtOhv1J0gTrQ0Es5Dc0OKiFvihQQI", authDomain: "carrahul.firebaseapp.com", projectId: "carrahul", storageBucket: "carrahul.firebasestorage.app", messagingSenderId: "63659564230", appId: "1:63659564230:web:f8a0c53a4e9c9cd2c4cbc7", measurementId: "G-JSPW1PPC6S" };
+
+        // Firebase Initialization
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const rtdb = firebase.database();
+        const lobbiesRef = db.collection('lobbies');
+        let playersRef; // Will be defined when a lobby is joined
+
+        // Element References
+        const authScreen = document.getElementById('authScreen');
+        const lobbyScreen = document.getElementById('lobbyScreen');
+        const mainGameWrapper = document.getElementById('mainGameWrapper');
+        const loginButton = document.getElementById('loginButton');
+        const createLobbyInput = document.getElementById('createLobbyInput');
+        const createLobbyBtn = document.getElementById('createLobbyBtn');
+        const lobbyList = document.getElementById('lobbyList');
+        const gameContainer = document.getElementById('gameContainer');
+        const playerCar = document.getElementById('playerCar');
+        const scoreBoard = document.getElementById('scoreBoard');
+        const leaderboardList = document.querySelector('#leaderboard ul');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const backToLobbyBtn = document.getElementById('backToLobbyBtn');
+
+        // Game/Player State
+        let gameWidth, gameHeight;
+        let player = { id: null, name: "Anonymous", x: 0, y: 0, vx: 0, vy: 0, score: 0 };
+        const otherPlayers = {};
+        let currentLobbyId = null;
+
+        // Game Loop/Interval IDs
+        let animationId, obstacleSpawnInterval, networkUpdateInterval;
+        let isGameOver = false;
+        const obstacles = [];
+        const roadLines = [];
+        const keys = {};
+
+        // Physics Constants
+        const acceleration = 0.5;
+        const friction = 0.95;
+        const maxSpeed = 7;
+
+        // --- Core Application Flow ---
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                player.id = user.uid;
+                player.name = user.displayName || "Anonymous";
+                authScreen.style.display = 'none';
+                showLobby();
+                managePresence(user);
+            } else {
+                player.id = null;
+                authScreen.style.display = 'block';
+                lobbyScreen.style.display = 'none';
+                mainGameWrapper.style.display = 'none';
+                endGame(false);
+            }
+        });
+
+        loginButton.onclick = () => {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            auth.signInWithPopup(provider).catch(error => console.error("Auth Error:", error));
+        };
+
+        // --- Lobby Logic ---
+        function showLobby() {
+            lobbyScreen.style.display = 'block';
+            mainGameWrapper.style.display = 'none';
+            if (player.id) playersRef?.doc(player.id).delete(); // Clean up previous game
+            
+            // Listen for available lobbies
+            lobbiesRef.onSnapshot(snapshot => {
+                lobbyList.innerHTML = '';
+                snapshot.forEach(doc => {
+                    const lobby = doc.data();
+                    const lobbyId = doc.id;
+                    const li = document.createElement('li');
+                    li.className = 'lobby-item';
+                    li.innerHTML = `<span>${lobby.name}</span> <button class="btn-green">Join</button>`;
+                    li.querySelector('button').onclick = () => joinLobby(lobbyId);
+                    lobbyList.appendChild(li);
+                });
+            });
+        }
+        
+        createLobbyBtn.onclick = () => {
+            const lobbyName = createLobbyInput.value.trim();
+            if (lobbyName) {
+                lobbiesRef.add({ name: lobbyName, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+                    .then(docRef => {
+                        joinLobby(docRef.id);
+                    });
+                createLobbyInput.value = '';
+            }
+        };
+
+        function joinLobby(lobbyId) {
+            currentLobbyId = lobbyId;
+            playersRef = lobbiesRef.doc(lobbyId).collection('players');
+            lobbyScreen.style.display = 'none';
+            mainGameWrapper.style.display = 'flex';
+            initGame();
+        }
+
+        backToLobbyBtn.onclick = showLobby;
+
+        // --- Game Setup & Loop ---
+        function initGame() {
+            isGameOver = false;
+            gameOverScreen.style.display = 'none';
+            player.score = 0;
+            player.vx = 0;
+            player.vy = 0;
+
+            gameWidth = gameContainer.offsetWidth;
+            gameHeight = gameContainer.offsetHeight;
+            player.x = (gameWidth - 50) / 2;
+            player.y = gameHeight - 100;
+
+            obstacles.forEach(obs => obs.remove());
+            obstacles.length = 0;
+
+            if(animationId) cancelAnimationFrame(animationId);
+            if(obstacleSpawnInterval) clearInterval(obstacleSpawnInterval);
+            if(networkUpdateInterval) clearInterval(networkUpdateInterval);
+
+            obstacleSpawnInterval = setInterval(spawnObstacle, 2000);
+            networkUpdateInterval = setInterval(updateNetwork, 50);
+
+            if (roadLines.length === 0) createRoadLines();
+            startGameListeners();
+            gameLoop();
+        }
+
+        function gameLoop() {
+            if (isGameOver) return;
+            updatePlayerPhysics();
+            playerCar.style.left = player.x + 'px';
+            playerCar.style.top = player.y + 'px';
+            moveObstacles();
+            moveRoadLines();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+        
+        function updateNetwork() {
+            if (!player.id || isGameOver) return;
+            player.score++;
+            scoreBoard.textContent = `Score: ${player.score}`;
+            playersRef.doc(player.id).set({
+                x: player.x, y: player.y, name: player.name, score: player.score
+            });
+        }
+        
+        function endGame(showScreen) {
+            isGameOver = true;
+            if (showScreen) gameOverScreen.style.display = 'flex';
+            cancelAnimationFrame(animationId);
+            clearInterval(obstacleSpawnInterval);
+            clearInterval(networkUpdateInterval);
+        }
+
+        // --- Event Handlers & Listeners ---
+        document.addEventListener('keydown', e => {
+            keys[e.key] = true;
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) e.preventDefault();
+        });
+        document.addEventListener('keyup', e => { keys[e.key] = false; });
+        window.addEventListener('beforeunload', () => {
+            if (player.id && playersRef) playersRef.doc(player.id).delete();
+        });
+
+        function startGameListeners() {
+            // Listen for players in the current lobby
+            playersRef.onSnapshot(snapshot => {
+                const allScores = [];
+                snapshot.forEach(doc => allScores.push(doc.data()));
+                renderLeaderboard(allScores.sort((a,b) => b.score - a.score));
+
+                snapshot.docChanges().forEach(change => {
+                    const docId = change.doc.id;
+                    const playerData = change.doc.data();
+                    if (docId === player.id) return;
+
+                    if (change.type === "removed") {
+                        if (otherPlayers[docId]) {
+                            otherPlayers[docId].el.remove();
+                            delete otherPlayers[docId];
+                        }
+                    } else {
+                        if (!otherPlayers[docId]) {
+                            const carEl = document.createElement('div');
+                            carEl.className = 'car other-player';
+                            carEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
+                            gameContainer.appendChild(carEl);
+                            otherPlayers[docId] = { el: carEl };
+                        }
+                        otherPlayers[docId].el.style.left = playerData.x + 'px';
+                        otherPlayers[docId].el.style.top = playerData.y + 'px';
+                    }
+                });
+            });
+        }
+
+        // All other functions (managePresence, renderLeaderboard, player physics, obstacles, etc.)
+        function updatePlayerPhysics() {
+            if (keys['ArrowRight']) player.vx += acceleration;
+            if (keys['ArrowLeft']) player.vx -= acceleration;
+            if (keys['ArrowUp']) player.vy -= acceleration;
+            if (keys['ArrowDown']) player.vy += acceleration;
+            player.vx *= friction;
+            player.vy *= friction;
+            player.vx = Math.max(-maxSpeed, Math.min(maxSpeed, player.vx));
+            player.vy = Math.max(-maxSpeed, Math.min(maxSpeed, player.vy));
+            player.x += player.vx;
+            player.y += player.vy;
+            player.x = Math.max(5, Math.min(gameWidth - 55, player.x));
+            player.y = Math.max(0, Math.min(gameHeight - 80, player.y));
+        }
+
+        function managePresence(user) {
+            const userStatusRef = rtdb.ref('/status/' + user.uid);
+            rtdb.ref('.info/connected').on('value', (snapshot) => {
+                if (snapshot.val() === false) return;
+                userStatusRef.onDisconnect().remove();
+                userStatusRef.set({ online: true });
+            });
+        }
+
+        function renderLeaderboard(scores) {
+            leaderboardList.innerHTML = '';
+            scores.slice(0, 5).forEach((p, index) => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="name">${index + 1}. ${p.name}</span> <span class="score">${p.score}</span>`;
+                leaderboardList.appendChild(li);
+            });
+        }
+        
+        function spawnObstacle() {
+            if(isGameOver) return;
+            const obsEl = document.createElement('div');
+            obsEl.className = 'car obstacle';
+            obsEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
+            obsEl.x = Math.random() * (gameWidth - 50);
+            obsEl.y = -100;
+            obsEl.style.left = obsEl.x + 'px';
+            obsEl.style.top = obsEl.y + 'px';
+            gameContainer.appendChild(obsEl);
+            obstacles.push(obsEl);
+        }
+
+        function moveObstacles() {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += 5;
+                if (obs.y > gameHeight) {
+                    obs.remove();
+                    obstacles.splice(i, 1);
+                } else {
+                    obs.style.top = obs.y + 'px';
+                    if (checkCollision(playerCar, obs)) endGame(true);
+                }
+            }
+        }
+        
+        function checkCollision(a, b) {
+            const aRect = a.getBoundingClientRect();
+            const bRect = b.getBoundingClientRect();
+            return !((aRect.bottom < bRect.top) || (aRect.top > bRect.bottom) || (aRect.right < bRect.left) || (aRect.left > bRect.right));
+        }
+        
+        function createRoadLines(){
+            for(let i=0; i < 5; i++){
+                let line = document.createElement("div");
+                line.className = "divider-line";
+                line.y = i * 120;
+                line.style.top = line.y + "px";
+                document.getElementById('road').appendChild(line);
+                roadLines.push(line);
+            }
+        }
+
+        function moveRoadLines(){
+            roadLines.forEach(line => {
+                line.y += (5 + Math.abs(player.vy * 0.5)); // Road speed increases with player speed
+                if(line.y > 500) line.y -= 600;
+                line.style.top = line.y + "px";
+            });
+        }
+    </script>
+</body>
+</html>
