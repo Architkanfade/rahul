@@ -1,3 +1,4 @@
+@ -0,0 +1,458 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -172,7 +173,7 @@
         const db = firebase.firestore();
         const rtdb = firebase.database();
         const lobbiesRef = db.collection('lobbies');
-        let playersRef;
+        let playersRef; // Will be defined when a lobby is joined
 
         // Element References
         const authScreen = document.getElementById('authScreen');
@@ -233,8 +234,9 @@
         function showLobby() {
             lobbyScreen.style.display = 'block';
             mainGameWrapper.style.display = 'none';
-            if (player.id && playersRef) playersRef.doc(player.id).delete();
+            if (player.id) playersRef?.doc(player.id).delete(); // Clean up previous game
             
+            // Listen for available lobbies
             lobbiesRef.onSnapshot(snapshot => {
                 lobbyList.innerHTML = '';
                 snapshot.forEach(doc => {
@@ -253,7 +255,9 @@
             const lobbyName = createLobbyInput.value.trim();
             if (lobbyName) {
                 lobbiesRef.add({ name: lobbyName, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
-                    .then(docRef => joinLobby(docRef.id));
+                    .then(docRef => {
+                        joinLobby(docRef.id);
+                    });
                 createLobbyInput.value = '';
             }
         };
@@ -281,9 +285,6 @@
             player.x = (gameWidth - 50) / 2;
             player.y = gameHeight - 100;
 
-            Object.values(otherPlayers).forEach(p => p.el.remove());
-            for (const key in otherPlayers) delete otherPlayers[key];
-            
             obstacles.forEach(obs => obs.remove());
             obstacles.length = 0;
 
@@ -302,7 +303,6 @@
         function gameLoop() {
             if (isGameOver) return;
             updatePlayerPhysics();
-            updateOtherPlayers();
             playerCar.style.left = player.x + 'px';
             playerCar.style.top = player.y + 'px';
             moveObstacles();
@@ -338,6 +338,7 @@
         });
 
         function startGameListeners() {
+            // Listen for players in the current lobby
             playersRef.onSnapshot(snapshot => {
                 const allScores = [];
                 snapshot.forEach(doc => allScores.push(doc.data()));
@@ -359,33 +360,16 @@
                             carEl.className = 'car other-player';
                             carEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
                             gameContainer.appendChild(carEl);
-                            otherPlayers[docId] = { 
-                                el: carEl,
-                                x: playerData.x,
-                                y: playerData.y,
-                                targetX: playerData.x,
-                                targetY: playerData.y
-                            };
-                        } else {
-                            otherPlayers[docId].targetX = playerData.x;
-                            otherPlayers[docId].targetY = playerData.y;
+                            otherPlayers[docId] = { el: carEl };
                         }
+                        otherPlayers[docId].el.style.left = playerData.x + 'px';
+                        otherPlayers[docId].el.style.top = playerData.y + 'px';
                     }
                 });
             });
         }
 
-        function updateOtherPlayers() {
-            for (const id in otherPlayers) {
-                const p = otherPlayers[id];
-                p.x += (p.targetX - p.x) * 0.2;
-                p.y += (p.targetY - p.y) * 0.2;
-                p.el.style.left = p.x + 'px';
-                p.el.style.top = p.y + 'px';
-            }
-        }
-
-        // --- Player Physics ---
+        // All other functions (managePresence, renderLeaderboard, player physics, obstacles, etc.)
         function updatePlayerPhysics() {
             if (keys['ArrowRight']) player.vx += acceleration;
             if (keys['ArrowLeft']) player.vx -= acceleration;
@@ -402,7 +386,6 @@
         }
 
         function managePresence(user) {
-            // THIS IS THE CORRECTED LINE
             const userStatusRef = rtdb.ref('/status/' + user.uid);
             rtdb.ref('.info/connected').on('value', (snapshot) => {
                 if (snapshot.val() === false) return;
@@ -415,4 +398,62 @@
             leaderboardList.innerHTML = '';
             scores.slice(0, 5).forEach((p, index) => {
                 const li = document.createElement('li');
-                li.innerHTML = `<span class="name">${index + 1}. ${p.name}</span> <span class="score">${p.score}
+                li.innerHTML = `<span class="name">${index + 1}. ${p.name}</span> <span class="score">${p.score}</span>`;
+                leaderboardList.appendChild(li);
+            });
+        }
+        
+        function spawnObstacle() {
+            if(isGameOver) return;
+            const obsEl = document.createElement('div');
+            obsEl.className = 'car obstacle';
+            obsEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
+            obsEl.x = Math.random() * (gameWidth - 50);
+            obsEl.y = -100;
+            obsEl.style.left = obsEl.x + 'px';
+            obsEl.style.top = obsEl.y + 'px';
+            gameContainer.appendChild(obsEl);
+            obstacles.push(obsEl);
+        }
+
+        function moveObstacles() {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const obs = obstacles[i];
+                obs.y += 5;
+                if (obs.y > gameHeight) {
+                    obs.remove();
+                    obstacles.splice(i, 1);
+                } else {
+                    obs.style.top = obs.y + 'px';
+                    if (checkCollision(playerCar, obs)) endGame(true);
+                }
+            }
+        }
+        
+        function checkCollision(a, b) {
+            const aRect = a.getBoundingClientRect();
+            const bRect = b.getBoundingClientRect();
+            return !((aRect.bottom < bRect.top) || (aRect.top > bRect.bottom) || (aRect.right < bRect.left) || (aRect.left > bRect.right));
+        }
+        
+        function createRoadLines(){
+            for(let i=0; i < 5; i++){
+                let line = document.createElement("div");
+                line.className = "divider-line";
+                line.y = i * 120;
+                line.style.top = line.y + "px";
+                document.getElementById('road').appendChild(line);
+                roadLines.push(line);
+            }
+        }
+
+        function moveRoadLines(){
+            roadLines.forEach(line => {
+                line.y += (5 + Math.abs(player.vy * 0.5)); // Road speed increases with player speed
+                if(line.y > 500) line.y -= 600;
+                line.style.top = line.y + "px";
+            });
+        }
+    </script>
+</body>
+</html>
