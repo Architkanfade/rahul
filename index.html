@@ -172,7 +172,7 @@
         const db = firebase.firestore();
         const rtdb = firebase.database();
         const lobbiesRef = db.collection('lobbies');
-        let playersRef; // Will be defined when a lobby is joined
+        let playersRef;
 
         // Element References
         const authScreen = document.getElementById('authScreen');
@@ -233,9 +233,8 @@
         function showLobby() {
             lobbyScreen.style.display = 'block';
             mainGameWrapper.style.display = 'none';
-            if (player.id) playersRef?.doc(player.id).delete(); // Clean up previous game
+            if (player.id && playersRef) playersRef.doc(player.id).delete();
             
-            // Listen for available lobbies
             lobbiesRef.onSnapshot(snapshot => {
                 lobbyList.innerHTML = '';
                 snapshot.forEach(doc => {
@@ -254,9 +253,7 @@
             const lobbyName = createLobbyInput.value.trim();
             if (lobbyName) {
                 lobbiesRef.add({ name: lobbyName, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
-                    .then(docRef => {
-                        joinLobby(docRef.id);
-                    });
+                    .then(docRef => joinLobby(docRef.id));
                 createLobbyInput.value = '';
             }
         };
@@ -284,6 +281,9 @@
             player.x = (gameWidth - 50) / 2;
             player.y = gameHeight - 100;
 
+            Object.values(otherPlayers).forEach(p => p.el.remove());
+            for (const key in otherPlayers) delete otherPlayers[key];
+            
             obstacles.forEach(obs => obs.remove());
             obstacles.length = 0;
 
@@ -302,6 +302,7 @@
         function gameLoop() {
             if (isGameOver) return;
             updatePlayerPhysics();
+            updateOtherPlayers(); // NEW: Smoothly update other players
             playerCar.style.left = player.x + 'px';
             playerCar.style.top = player.y + 'px';
             moveObstacles();
@@ -337,11 +338,10 @@
         });
 
         function startGameListeners() {
-            // Listen for players in the current lobby
             playersRef.onSnapshot(snapshot => {
-                const allScores = [];
-                snapshot.forEach(doc => allScores.push(doc.data()));
-                renderLeaderboard(allScores.sort((a,b) => b.score - a.score));
+                const scores = [];
+                snapshot.forEach(doc => scores.push(doc.data()));
+                renderLeaderboard(scores.sort((a,b) => b.score - a.score));
 
                 snapshot.docChanges().forEach(change => {
                     const docId = change.doc.id;
@@ -353,22 +353,43 @@
                             otherPlayers[docId].el.remove();
                             delete otherPlayers[docId];
                         }
-                    } else {
+                    } else { // 'added' or 'modified'
                         if (!otherPlayers[docId]) {
+                            // NEW: Store current and target positions for interpolation
                             const carEl = document.createElement('div');
                             carEl.className = 'car other-player';
                             carEl.innerHTML = `<div class="car-body"><div class="car-window"></div></div>`;
                             gameContainer.appendChild(carEl);
-                            otherPlayers[docId] = { el: carEl };
+                            otherPlayers[docId] = { 
+                                el: carEl,
+                                x: playerData.x,
+                                y: playerData.y,
+                                targetX: playerData.x,
+                                targetY: playerData.y
+                            };
+                        } else {
+                            // CHANGED: Only update the target position, don't teleport
+                            otherPlayers[docId].targetX = playerData.x;
+                            otherPlayers[docId].targetY = playerData.y;
                         }
-                        otherPlayers[docId].el.style.left = playerData.x + 'px';
-                        otherPlayers[docId].el.style.top = playerData.y + 'px';
                     }
                 });
             });
         }
 
-        // All other functions (managePresence, renderLeaderboard, player physics, obstacles, etc.)
+        // --- NEW: Interpolation function for other players ---
+        function updateOtherPlayers() {
+            for (const id in otherPlayers) {
+                const p = otherPlayers[id];
+                // Move current position a fraction of the way to the target
+                p.x += (p.targetX - p.x) * 0.2;
+                p.y += (p.targetY - p.y) * 0.2;
+                p.el.style.left = p.x + 'px';
+                p.el.style.top = p.y + 'px';
+            }
+        }
+
+        // --- Player Physics ---
         function updatePlayerPhysics() {
             if (keys['ArrowRight']) player.vx += acceleration;
             if (keys['ArrowLeft']) player.vx -= acceleration;
@@ -384,8 +405,9 @@
             player.y = Math.max(0, Math.min(gameHeight - 80, player.y));
         }
 
+        // All other functions (managePresence, renderLeaderboard, obstacles, etc.)
         function managePresence(user) {
-            const userStatusRef = rtdb.ref('/status/' + user.uid);
+            const userStatusRef = rtdb.ref('/status/'' + user.uid);
             rtdb.ref('.info/connected').on('value', (snapshot) => {
                 if (snapshot.val() === false) return;
                 userStatusRef.onDisconnect().remove();
@@ -448,7 +470,7 @@
 
         function moveRoadLines(){
             roadLines.forEach(line => {
-                line.y += (5 + Math.abs(player.vy * 0.5)); // Road speed increases with player speed
+                line.y += (5 + Math.abs(player.vy * 0.5));
                 if(line.y > 500) line.y -= 600;
                 line.style.top = line.y + "px";
             });
